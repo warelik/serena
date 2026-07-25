@@ -706,7 +706,7 @@ This single command configures everything:
 - Enables cross-project querying via `--add-mode query-projects`.
 - Disables the web dashboard (`--enable-web-dashboard false --open-web-dashboard false`).
 - Auto-approves all Serena MCP tools via Devin CLI's `permissions.allow` list.
-- Installs Serena's lifecycle hooks for `SessionStart`, `PreToolUse`, `PostCompaction` and `SessionEnd`.
+- Installs Serena's lifecycle hooks for `SessionStart`, `PreToolUse`, `PostCompaction` and `UserPromptSubmit`.
 
 For a per-project setup instead of a global one, run:
 
@@ -787,12 +787,12 @@ See Devin CLI's [permissions documentation](https://docs.devin.ai/cli/reference/
       ]
     }
   ],
-  "SessionEnd": [
+  "UserPromptSubmit": [
     {
       "hooks": [
         {
           "type": "command",
-          "command": "serena-hooks cleanup --client=devin",
+          "command": "serena-hooks user-prompt-remind --client=devin --event UserPromptSubmit",
           "timeout": 5
         }
       ]
@@ -806,7 +806,24 @@ The hooks will:
 - **`activate --include-instructions` (SessionStart)**: Re-inject the full Serena system prompt at the start of the session so the model starts with Serena's capabilities in context.
 - **`remind` (PreToolUse)**: Add a short reminder in `additionalContext` when the agent makes several consecutive `read`/`grep`/`exec` calls without using Serena's symbolic tools. No tool call is rewritten or blocked; Devin CLI's `block`/`deny` semantics are too fragile and can cancel the turn, so the hook only nudges via context and resets the counter.
 - **`activate --include-instructions` (PostCompaction)**: Re-inject the full Serena system prompt after Devin CLI compacts context, so the model does not lose Serena's instructions.
-- **`cleanup` (SessionEnd)**: Clean up hook session data when the session ends.
+- **`user-prompt-remind` (UserPromptSubmit)**: Add a short reminder in `additionalContext` on every user prompt, nudging the agent to prefer Serena's symbolic tools for coding tasks. No prompt is blocked or rewritten.
+
+### Optional Modules and Modes
+
+The following optional Serena modules and modes can be enabled on top of the Devin CLI setup. All activation methods are the ones documented by Serena itself:
+
+| Module / Mode | What it provides | How to enable |
+|---|---|---|
+| JetBrains plugin backend | Advanced refactoring (move, inline, safe delete) and all JetBrains IDE languages | `serena init -b JetBrains` or set `backend: JetBrains`; install the Serena plugin from the JetBrains Marketplace (paid, trial available) |
+| Web dashboard / GUI | Browser-based UI for settings, projects and logs | Start with `--enable-web-dashboard true --open-web-dashboard true` or open `serena dashboard` |
+| `query-projects` mode | Query other Serena projects without activating them | Already enabled by `serena setup devin` via `--add-mode query-projects` |
+| `no-memories` mode | Disable Serena's memory and onboarding tools | `--add-mode no-memories` or set `default_modes` in `serena_config.yml` |
+| `onboarding` mode | Focus on the project onboarding workflow | `--add-mode onboarding` |
+| `planning` mode | Focus on planning and analysis tasks | `--mode planning` |
+| `editing` mode | Optimize for direct code modification | `--mode editing` |
+| `interactive` mode | Conversational, back-and-forth interaction style | `--add-mode interactive` |
+| `one-shot` mode | Single-response tasks | `--add-mode one-shot` |
+
 ## Other Clients
 
 For other clients, follow the [general instructions](#clients-general-instructions) above to set up Serena as an MCP server.

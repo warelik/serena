@@ -215,7 +215,7 @@ class ClientSetupHandlerDevin(ClientSetupHandler):
             click.echo(f"  Config: {config_path}")
             click.echo("  MCP server: serena")
             click.echo("  Permissions: auto-approve mcp__serena__*")
-            click.echo("  Hooks: SessionStart, PreToolUse, PostCompaction, SessionEnd")
+            click.echo("  Hooks: SessionStart, PreToolUse, PostCompaction, UserPromptSubmit")
             return True
         except Exception as e:
             click.echo(f"Failed to update Devin CLI config: {e}")
@@ -258,7 +258,7 @@ class ClientSetupHandlerDevin(ClientSetupHandler):
         session_start_command = "serena-hooks activate --client=devin --include-instructions --event SessionStart"
         pre_tool_use_command = "serena-hooks remind --client=devin"
         post_compaction_command = "serena-hooks activate --client=devin --include-instructions --event PostCompaction"
-        session_end_command = "serena-hooks cleanup --client=devin"
+        user_prompt_submit_command = "serena-hooks user-prompt-remind --client=devin --event UserPromptSubmit"
 
         # Remove stale experimental serena-devin.js hooks that this installer
         # may have created in earlier iterations.
@@ -268,8 +268,8 @@ class ClientSetupHandlerDevin(ClientSetupHandler):
         # Remove any existing serena-hooks entries for the events we are about
         # to register, so repeated installs replace old commands with the
         # current ones instead of accumulating duplicates. Also drop the
-        # obsolete PostToolUse entries that previous versions may have created.
-        for event in ("SessionStart", "PreToolUse", "PostToolUse", "PostCompaction", "SessionEnd"):
+        # obsolete PostToolUse and SessionEnd entries that previous versions may have created.
+        for event in ("SessionStart", "PreToolUse", "PostToolUse", "PostCompaction", "UserPromptSubmit", "SessionEnd"):
             event_list = hooks.get(event, [])
             cleaned = [entry for entry in event_list if not self._is_serena_hooks_entry(entry)]
             if cleaned:
@@ -280,7 +280,7 @@ class ClientSetupHandlerDevin(ClientSetupHandler):
         self._add_hook_event(hooks, "SessionStart", session_start_command)
         self._add_hook_event(hooks, "PreToolUse", pre_tool_use_command, matcher="")
         self._add_hook_event(hooks, "PostCompaction", post_compaction_command)
-        self._add_hook_event(hooks, "SessionEnd", session_end_command)
+        self._add_hook_event(hooks, "UserPromptSubmit", user_prompt_submit_command)
 
     def _is_stale_serena_hook(self, entry: Any) -> bool:
         for hook in entry.get("hooks", []):

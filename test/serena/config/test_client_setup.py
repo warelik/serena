@@ -249,6 +249,11 @@ def test_devin_setup_handler_writes_full_config(monkeypatch, tmp_path: Path):
         entry.get("hooks", [])[0].get("command") == "serena-hooks activate --client=devin --include-instructions --event PostCompaction"
         for entry in config["hooks"]["PostCompaction"]
     )
+    assert any(
+        entry.get("hooks", [])[0].get("command") == "serena-hooks user-prompt-remind --client=devin --event UserPromptSubmit"
+        for entry in config["hooks"]["UserPromptSubmit"]
+    )
+    assert "SessionEnd" not in config["hooks"]
 
 
 def test_devin_setup_handler_removes_stale_node_hooks(monkeypatch, tmp_path: Path):

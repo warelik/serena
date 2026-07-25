@@ -16,6 +16,7 @@ from serena.hooks import (
     PreToolUseRemindAboutSymbolicToolsHook,
     SessionEndCleanupHook,
     SessionStartActivateProjectHook,
+    UserPromptSubmitRemindHook,
     hook_commands,
 )
 
@@ -1188,7 +1189,7 @@ class TestDevinHookSupport:
         assert "decision" not in result
         assert result["hookSpecificOutput"]["hookEventName"] == "PreToolUse"
         assert "updatedInput" not in result["hookSpecificOutput"]
-        assert "Serena" in result["hookSpecificOutput"]["additionalContext"]
+        assert "symbolic tools" in result["hookSpecificOutput"]["additionalContext"]
 
     def test_devin_remind_emits_context_on_code_read_burst(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]):
         """A code-file ``read`` burst emits a short reminder via additionalContext (no rewrite)."""
@@ -1199,7 +1200,7 @@ class TestDevinHookSupport:
         result = json.loads(capsys.readouterr().out)
         assert "decision" not in result
         assert "updatedInput" not in result["hookSpecificOutput"]
-        assert "Serena" in result["hookSpecificOutput"]["additionalContext"]
+        assert "symbolic tools" in result["hookSpecificOutput"]["additionalContext"]
 
     def test_devin_remind_emits_context_on_exec_burst(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]):
         """An ``exec`` code-read burst emits a short reminder via additionalContext (no rewrite)."""
@@ -1210,7 +1211,7 @@ class TestDevinHookSupport:
         result = json.loads(capsys.readouterr().out)
         assert "decision" not in result
         assert "updatedInput" not in result["hookSpecificOutput"]
-        assert "Serena" in result["hookSpecificOutput"]["additionalContext"]
+        assert "symbolic tools" in result["hookSpecificOutput"]["additionalContext"]
 
     def test_devin_remind_silent_below_threshold(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]):
         """Below the burst threshold the remind hook stays silent (tool runs unchanged)."""
@@ -1321,3 +1322,28 @@ class TestDevinHookSupport:
         assert result["hookSpecificOutput"]["hookEventName"] == "PostCompaction"
         assert "FULL SERENA INSTRUCTIONS" in result["hookSpecificOutput"]["additionalContext"]
         assert "activate it using Serena" in result["hookSpecificOutput"]["additionalContext"]
+
+    def test_devin_user_prompt_submit_short_reminder(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]):
+        """UserPromptSubmit hook emits a short reminder and never blocks."""
+        with patch("sys.stdin", _make_stdin({"session_id": "devin-session"})), patch("serena.hooks.serena_home_dir", str(tmp_path)):
+            UserPromptSubmitRemindHook(HookClient.DEVIN).execute()
+        output = capsys.readouterr().out
+        result = json.loads(output)
+        assert result["hookSpecificOutput"]["hookEventName"] == "UserPromptSubmit"
+        assert "semantic coding tools" in result["hookSpecificOutput"]["additionalContext"]
+        assert "prioritize them" in result["hookSpecificOutput"]["additionalContext"]
+        assert "decision" not in result
+
+    def test_devin_remind_uses_instruction_excerpt_on_burst(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ):
+        """A Devin PreToolUse burst emits a reminder taken from the full instructions."""
+        with patch("serena.hooks.serena_home_dir", str(tmp_path)):
+            for _ in range(3):
+                with patch("sys.stdin", _make_stdin(_base_input(tool_name="read", tool_input={"file_path": "src/foo.py"}))):
+                    PreToolUseRemindAboutSymbolicToolsHook(HookClient.DEVIN).execute()
+        result = json.loads(capsys.readouterr().out)
+        assert "decision" not in result
+        assert "updatedInput" not in result["hookSpecificOutput"]
+        assert "Avoid reading whole files" in result["hookSpecificOutput"]["additionalContext"]
+        assert "symbolic tools" in result["hookSpecificOutput"]["additionalContext"]

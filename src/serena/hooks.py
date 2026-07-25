@@ -366,6 +366,15 @@ class PreToolUseRemindAboutSymbolicToolsHook(PreToolUseHook):
         )
     )
 
+    #: Short reminder for Devin CLI, taken verbatim from the full Devin-context
+    #: instructions. It is used as ``additionalContext`` on PreToolUse bursts.
+    _DEVIN_REMINDER = (
+        "Some tasks require understanding a large part of the codebase; others need only a few symbols or a "
+        "single file. Avoid reading whole files unless necessary — acquire information step by step, using "
+        "the symbolic tools to get an overview of symbols and their relations, then reading only the bodies "
+        "you need. You can continue using the current tool now if needed, the counter was reset."
+    )
+
     def __init__(self, client: HookClient):
         super().__init__(client)
         self._tool_call_counter = self.ToolUseCounter.load(self)
@@ -504,6 +513,12 @@ class PreToolUseRemindAboutSymbolicToolsHook(PreToolUseHook):
         self._tool_call_counter.save(self)
 
     def _build_grep_deny(self) -> "PreToolUseHook.OutputData":
+        if self._client == HookClient.DEVIN:
+            return self.OutputData(
+                permission_decision="deny",
+                permission_decision_reason=self._DEVIN_REMINDER,
+                additional_context=self._DEVIN_REMINDER,
+            )
         return self.OutputData(
             permission_decision="deny",
             permission_decision_reason="Too many consecutive grep calls without using symbolic tools. "
@@ -515,6 +530,12 @@ class PreToolUseRemindAboutSymbolicToolsHook(PreToolUseHook):
         )
 
     def _build_code_read_deny(self) -> "PreToolUseHook.OutputData":
+        if self._client == HookClient.DEVIN:
+            return self.OutputData(
+                permission_decision="deny",
+                permission_decision_reason=self._DEVIN_REMINDER,
+                additional_context=self._DEVIN_REMINDER,
+            )
         return self.OutputData(
             permission_decision="deny",
             permission_decision_reason="Too many consecutive read calls of files without using symbolic tools. "
@@ -526,6 +547,12 @@ class PreToolUseRemindAboutSymbolicToolsHook(PreToolUseHook):
         )
 
     def _build_non_symbolic_deny(self) -> "PreToolUseHook.OutputData":
+        if self._client == HookClient.DEVIN:
+            return self.OutputData(
+                permission_decision="deny",
+                permission_decision_reason=self._DEVIN_REMINDER,
+                additional_context=self._DEVIN_REMINDER,
+            )
         return self.OutputData(
             permission_decision="deny",
             permission_decision_reason="Too many consecutive non-symbolic tool calls (mixed grep and read). "
@@ -565,7 +592,7 @@ class SessionStartActivateProjectHook(Hook):
             f"**IMPORTANT**: If the current directory is a coding project you are working on:{project_clause}"
             " 1. activate it using Serena's activate_project tool unless already done. "
             " 2. if you haven't read Serena Instructions Manual yet, do so. "
-            f" 3. {index_clause}"
+            f" 3. {index_clause} "
             "Follow this instruction before doing anything else."
         )
         instructions = self._full_instructions() if self._include_instructions else ""
@@ -674,6 +701,32 @@ class SessionStartActivateProjectHook(Hook):
         return "stale" if age_days > self._STALE_INDEX_DAYS else "ok"
 
 
+class UserPromptSubmitRemindHook(Hook):
+    """UserPromptSubmit hook that injects a short reminder to use Serena's symbolic tools.
+
+    The reminder is intentionally brief and consists of verbatim sentences from the
+    full Devin-context instructions. It never blocks or rewrites user input.
+    """
+
+    _SHORT_REMINDER = (
+        "You have semantic coding tools that you rely on heavily. "
+        "If Serena's tools can be used to achieve your task, prioritize them."
+    )
+
+    def __init__(self, client: HookClient, event_name: str | None = None):
+        super().__init__(client)
+        self._event_name = event_name or self._input_data.get("hook_event_name") or self._input_data.get("hookEventName") or "UserPromptSubmit"
+
+    def execute(self) -> None:
+        result = {
+            "hookSpecificOutput": {
+                "hookEventName": self._event_name,
+                "additionalContext": self._SHORT_REMINDER,
+            }
+        }
+        click.echo(json.dumps(result))
+
+
 class SessionEndCleanupHook(Hook):
     def execute(self) -> None:
         shutil.rmtree(self.session_persistence_dir, ignore_errors=True)
@@ -747,6 +800,16 @@ class HookCommands(AutoRegisteringGroup):
     @click.option("--event", default="SessionStart", help="The Devin hook event name to emit in the response.")
     def activate(client: str, include_instructions: bool, event: str) -> None:
         SessionStartActivateProjectHook(HookClient(client), include_instructions=include_instructions, event_name=event).execute()
+
+    @staticmethod
+    @click.command(
+        "user-prompt-remind",
+        help="Set this as hook at UserPromptSubmit to inject a short reminder to use Serena's tools.",
+    )
+    @_client_option
+    @click.option("--event", default="UserPromptSubmit", help="The Devin hook event name to emit in the response.")
+    def user_prompt_remind(client: str, event: str) -> None:
+        UserPromptSubmitRemindHook(HookClient(client), event_name=event).execute()
 
     @staticmethod
     @click.command("cleanup", help="Set this as hook at session end all hook data for the current session")
