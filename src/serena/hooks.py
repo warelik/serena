@@ -569,6 +569,8 @@ class PreToolUseRemindAboutSymbolicToolsHook(PreToolUseHook):
 class SessionStartActivateProjectHook(Hook):
     #: cache files older than this many days are considered stale
     _STALE_INDEX_DAYS = 7
+    #: hook-data directories older than this many days are removed on SessionStart
+    _HOOK_DATA_CLEANUP_DAYS = 7
 
     def __init__(
         self,
@@ -583,6 +585,11 @@ class SessionStartActivateProjectHook(Hook):
         self._event_name = event_name or self._input_data.get("hook_event_name") or self._input_data.get("hookEventName") or "SessionStart"
 
     def execute(self) -> None:
+        # Clean up hook-data directories left behind by sessions that never triggered
+        # SessionEnd (e.g., crashes or long-lived sessions), while keeping the current
+        # session's data intact.
+        self._cleanup_old_hook_sessions()
+
         # Devin CLI exposes the project root via DEVIN_PROJECT_DIR; including it in the prompt
         # lets the agent know exactly which project is active without guessing from CWD.
         devin_project_dir = os.environ.get("DEVIN_PROJECT_DIR")
@@ -699,6 +706,34 @@ class SessionStartActivateProjectHook(Hook):
             return "missing"
         age_days = (datetime.now().timestamp() - newest_mtime) / 86400
         return "stale" if age_days > self._STALE_INDEX_DAYS else "ok"
+
+    def _cleanup_old_hook_sessions(self) -> None:
+        """Remove hook-data directories older than :attr:`_HOOK_DATA_CLEANUP_DAYS`.
+
+        SessionEnd is not always triggered, so stale session data can accumulate.
+        This runs on SessionStart and removes only directories whose newest file
+        is older than the threshold, leaving the current (fresh) session untouched.
+        """
+        hook_data_dir = Path(serena_home_dir) / "hook_data"
+        if not hook_data_dir.is_dir():
+            return
+        now = datetime.now().timestamp()
+        for session_dir in hook_data_dir.iterdir():
+            if not session_dir.is_dir():
+                continue
+            newest_mtime: float | None = None
+            for file in session_dir.rglob("*"):
+                if file.is_file():
+                    mtime = file.stat().st_mtime
+                    if newest_mtime is None or mtime > newest_mtime:
+                        newest_mtime = mtime
+            if newest_mtime is None:
+                # empty directory; remove it as well
+                shutil.rmtree(session_dir, ignore_errors=True)
+                continue
+            age_days = (now - newest_mtime) / 86400
+            if age_days > self._HOOK_DATA_CLEANUP_DAYS:
+                shutil.rmtree(session_dir, ignore_errors=True)
 
 
 class UserPromptSubmitRemindHook(Hook):

@@ -803,7 +803,7 @@ See Devin CLI's [permissions documentation](https://docs.devin.ai/cli/reference/
 
 The hooks will:
 
-- **`activate --include-instructions` (SessionStart)**: Re-inject the full Serena system prompt at the start of the session so the model starts with Serena's capabilities in context.
+- **`activate --include-instructions` (SessionStart)**: Re-inject the full Serena system prompt at the start of the session so the model starts with Serena's capabilities in context. It also cleans up hook-data directories older than 7 days so sessions that never triggered `SessionEnd` do not leave stale state behind.
 - **`remind` (PreToolUse)**: Add a short reminder in `additionalContext` when the agent makes several consecutive `read`/`grep`/`exec` calls without using Serena's symbolic tools. No tool call is rewritten or blocked; Devin CLI's `block`/`deny` semantics are too fragile and can cancel the turn, so the hook only nudges via context and resets the counter.
 - **`activate --include-instructions` (PostCompaction)**: Re-inject the full Serena system prompt after Devin CLI compacts context, so the model does not lose Serena's instructions.
 - **`user-prompt-remind` (UserPromptSubmit)**: Add a short reminder in `additionalContext` on every user prompt, nudging the agent to prefer Serena's symbolic tools for coding tasks. No prompt is blocked or rewritten.

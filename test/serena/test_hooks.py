@@ -1347,3 +1347,30 @@ class TestDevinHookSupport:
         assert "updatedInput" not in result["hookSpecificOutput"]
         assert "Avoid reading whole files" in result["hookSpecificOutput"]["additionalContext"]
         assert "symbolic tools" in result["hookSpecificOutput"]["additionalContext"]
+
+    def test_devin_session_start_cleans_old_hook_data(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ):
+        """SessionStart removes stale hook-data directories without deleting fresh ones."""
+        hook_data_dir = tmp_path / "hook_data"
+        old_session_dir = hook_data_dir / "old-session"
+        fresh_session_dir = hook_data_dir / "fresh-session"
+        old_session_dir.mkdir(parents=True)
+        fresh_session_dir.mkdir(parents=True)
+
+        old_file = old_session_dir / "counter.pkl"
+        old_file.write_text("old", encoding="utf-8")
+        old_mtime = (datetime.now() - timedelta(days=10)).timestamp()
+        old_file.touch(exist_ok=True)
+        os.utime(old_file, (old_mtime, old_mtime))
+
+        fresh_file = fresh_session_dir / "counter.pkl"
+        fresh_file.write_text("fresh", encoding="utf-8")
+
+        monkeypatch.delenv("DEVIN_PROJECT_DIR", raising=False)
+        with patch("sys.stdin", _make_stdin({"session_id": "devin-session"})), patch("serena.hooks.serena_home_dir", str(tmp_path)):
+            SessionStartActivateProjectHook(HookClient.DEVIN).execute()
+        # output is still valid JSON
+        assert json.loads(capsys.readouterr().out)
+        assert not old_session_dir.exists()
+        assert fresh_session_dir.exists()
