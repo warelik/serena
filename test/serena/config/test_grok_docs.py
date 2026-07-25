@@ -78,7 +78,7 @@ def test_devin_docs_are_consistent():
     assert "030_clients.html#devin-cli" in handler_source
     assert "serena setup devin" in devin_section
     assert "serena-hooks remind --client=devin" in devin_section
-    assert "serena-hooks cleanup --client=devin" in devin_section
+    assert "serena-hooks user-prompt-remind --client=devin" in devin_section
     assert "serena-hooks activate --client=devin" in devin_section
 
     # Auto-approval uses Devin CLI's native permission allow-list, not a hook.
